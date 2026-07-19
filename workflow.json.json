@@ -1,0 +1,644 @@
+{
+  "name": "AI Disaster Incident Response Coordinator",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "4afdc746-66fa-4a23-8016-f9d761cc2311",
+      "name": "Manual Trigger (Test)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "incident_id",
+              "value": "INC-001",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "incident_description",
+              "value": "A large fire has broken out in a shopping mall. Smoke is spreading rapidly and several people may be trapped.",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "location",
+              "value": "Hyderabad",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "reporter_name",
+              "value": "John",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "contact_number",
+              "value": "9876543210",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "date_time",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "774b4e77-c84f-4ae2-b72b-bbb6409e8805",
+      "name": "Set Incident Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze the following disaster incident report.\n\nIncident ID: {{ $json.incident_id }}\nDescription: {{ $json.incident_description }}\nLocation: {{ $json.location }}\nReporter: {{ $json.reporter_name }}\nContact: {{ $json.contact_number }}\nDate & Time: {{ $json.date_time }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an emergency disaster response analyst.\n\nAnalyze the incident and return ONLY valid JSON with the following structure:\n\n{\n \"disaster_type\":\"\",\n \"severity\":\"\",\n \"priority\":\"\",\n \"people_at_risk\":\"\",\n \"recommended_teams\":[],\n \"recommended_vehicles\":[],\n \"estimated_response_time\":\"\",\n \"incident_summary\":\"\"\n}\n\nDo not return markdown or explanations."
+        }
+      },
+      "id": "15c3838c-edd0-4329-9406-6d8b3738b416",
+      "name": "Incident Analyzer",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        112
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "05069735-6f2f-4238-b74e-88f7f821f76d",
+      "name": "Gemini - Analyzer",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        464,
+        336
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "izCSYp7LHyTFyxDg",
+          "name": "Google Gemini(PaLM) Api account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\"disaster_type\":\"Fire\",\"severity\":\"High\",\"priority\":\"Critical\",\"people_at_risk\":\"Several people possibly trapped\",\"recommended_teams\":[\"Fire Brigade\",\"Rescue Team\"],\"recommended_vehicles\":[\"Fire Truck\",\"Ambulance\"],\"estimated_response_time\":\"10 minutes\",\"incident_summary\":\"Large fire in a shopping mall with people trapped.\"}"
+      },
+      "id": "2236a6ac-9ed9-4adc-88eb-98129613d755",
+      "name": "Parse Incident Analysis",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openweathermap.org/data/2.5/weather",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openWeatherMapApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $('Set Incident Data').item.json.location }}"
+            },
+            {
+              "name": "units",
+              "value": "metric"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "b2f67ebf-d6c6-4483-8029-795e0524c3f6",
+      "name": "Weather Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        800,
+        112
+      ],
+      "credentials": {
+        "openWeatherMapApi": {
+          "id": "AsPtJqdvdbvwi888",
+          "name": "OpenWeatherMap account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Disaster Analysis (JSON):\n{{ JSON.stringify($('Incident Analyzer').item.json.output) }}\n\nWeather Conditions:\nWeather: {{ $('Weather Check').item.json.weather?.[0]?.main || 'Unknown' }}\nTemperature: {{ $('Weather Check').item.json.main?.temp || 'Unknown' }} C\nWind Speed: {{ $('Weather Check').item.json.wind?.speed || 'Unknown' }} m/s\nHumidity: {{ $('Weather Check').item.json.main?.humidity || 'Unknown' }} %",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an emergency resource allocation expert.\n\nBased on the disaster analysis and weather conditions, recommend:\n\n- Fire Trucks\n- Ambulances\n- Police Units\n- Rescue Teams\n- Medical Teams\n- Special Equipment\n- Safety Instructions\n\nReturn ONLY valid JSON."
+        }
+      },
+      "id": "dffba4be-ac9c-4253-b8b9-c73aed3600b0",
+      "name": "Resource Allocation",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1024,
+        112
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "deeddd04-15a3-4b27-8f19-50439fe7746e",
+      "name": "Gemini - Resources",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        992,
+        352
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "izCSYp7LHyTFyxDg",
+          "name": "Google Gemini(PaLM) Api account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\"fire_trucks\":\"3\",\"ambulances\":\"5\",\"police_units\":\"4\",\"rescue_teams\":\"2\",\"medical_teams\":\"2\",\"special_equipment\":[\"Thermal cameras\",\"Breathing apparatus\"],\"safety_instructions\":[\"Evacuate the building\",\"Establish a safety perimeter\"]}"
+      },
+      "id": "64d2339b-a8e7-43a1-96f5-67a1cb5a46bc",
+      "name": "Parse Resource Plan",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1168,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Create a concise executive summary for emergency coordinators.\n\nIncident: {{ $('Set Incident Data').item.json.incident_description }} (ID: {{ $('Set Incident Data').item.json.incident_id }}, Location: {{ $('Set Incident Data').item.json.location }})\nDisaster Analysis: {{ JSON.stringify($('Incident Analyzer').item.json.output) }}\nWeather: {{ $('Weather Check').item.json.weather?.[0]?.main || 'Unknown' }}, {{ $('Weather Check').item.json.main?.temp || 'Unknown' }} C, wind {{ $('Weather Check').item.json.wind?.speed || 'Unknown' }} m/s\nRequired Resources: {{ JSON.stringify($json.output) }}",
+        "options": {
+          "systemMessage": "You are an emergency operations coordinator. Write a concise, well-structured executive summary for emergency coordinators that clearly covers: the Incident, Severity, Weather, Required Resources, Estimated Response Time, and Immediate Actions. Use short headed sections and plain professional language. Return plain text only."
+        }
+      },
+      "id": "98ff48a3-0a1b-44d3-83bf-73aede6b3a9c",
+      "name": "Executive Summary",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1376,
+        112
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "4edc9964-de92-4909-8e0f-70f9e7c7a523",
+      "name": "Gemini - Summary",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1456,
+        336
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "izCSYp7LHyTFyxDg",
+          "name": "Google Gemini(PaLM) Api account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "chaitrikanelluri7@gmail.com",
+        "subject": "=[DISASTER ALERT] {{ $('Incident Analyzer').item.json.output.disaster_type }} - {{ $('Incident Analyzer').item.json.output.severity }} - {{ $('Set Incident Data').item.json.incident_id }}",
+        "message": "=<h2>Disaster Incident Alert</h2><p><b>Incident ID:</b> {{ $('Set Incident Data').item.json.incident_id }}</p><p><b>Disaster Type:</b> {{ $('Incident Analyzer').item.json.output.disaster_type }}</p><p><b>Severity:</b> {{ $('Incident Analyzer').item.json.output.severity }}</p><p><b>Priority:</b> {{ $('Incident Analyzer').item.json.output.priority }}</p><p><b>Location:</b> {{ $('Set Incident Data').item.json.location }}</p><p><b>Weather:</b> {{ $('Weather Check').item.json.weather?.[0]?.main || 'Unknown' }}, {{ $('Weather Check').item.json.main?.temp || 'Unknown' }} C, wind {{ $('Weather Check').item.json.wind?.speed || 'Unknown' }} m/s, humidity {{ $('Weather Check').item.json.main?.humidity || 'Unknown' }} %</p><p><b>Recommended Resources:</b><br><pre>{{ JSON.stringify($('Resource Allocation').item.json.output, null, 2) }}</pre></p><h3>Executive Summary</h3><p>{{ $json.output }}</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9ba15498-b4c5-4b97-923e-eb7612b389b9",
+      "name": "Send Alert Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1728,
+        112
+      ],
+      "webhookId": "ae9bd64e-3da3-433d-9f25-e616b230295b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "B0krNT0UIldrccho",
+          "name": "Gmail account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1pLY8mcJ2Bf0tFI-l18xXBK9PGT5cBpt9o5FYwS9cxKY/edit?pli=1&gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "incident_id": "={{ $('Set Incident Data').item.json.incident_id }}",
+            "location": "={{ $('Set Incident Data').item.json.location }}",
+            "disaster_type": "={{ $('Incident Analyzer').item.json.output.disaster_type }}",
+            "severity": "={{ $('Incident Analyzer').item.json.output.severity }}",
+            "priority": "={{ $('Incident Analyzer').item.json.output.priority }}",
+            "weather": "={{ $('Weather Check').item.json.weather?.[0]?.main || 'Unknown' }}, {{ $('Weather Check').item.json.main?.temp || 'Unknown' }} C",
+            "resource_recommendation": "={{ JSON.stringify($('Resource Allocation').item.json.output) }}",
+            "executive_summary": "={{ $json.output }}"
+          },
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "incident_id",
+              "displayName": "incident_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "disaster_type",
+              "displayName": "disaster_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "weather",
+              "displayName": "weather",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resource_recommendation",
+              "displayName": "resource_recommendation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "executive_summary",
+              "displayName": "executive_summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8c468497-daba-4085-833d-dcf8330244b5",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1952,
+        112
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MnzxYhhVt8lmmoBR",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## 1. Trigger & Incident Input\n\nManual Trigger for testing. Swap in a **Webhook Trigger** later without changing downstream logic — just keep the same field names (incident_id, incident_description, location, reporter_name, contact_number, date_time) that \"Set Incident Data\" produces.",
+        "height": 200,
+        "width": 300
+      },
+      "id": "954e80d6-cb5b-499b-985a-e631699445ae",
+      "name": "Sticky Note 954e80d6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2. AI Incident Analyzer\n\nGoogle Gemini + AI Agent. Classifies disaster_type, severity, priority, people_at_risk, recommended teams/vehicles, response time and a summary. Structured Output Parser returns clean JSON under `$json.output`.",
+        "height": 200,
+        "width": 300
+      },
+      "id": "a8d4c4e4-31b5-49e4-bc0b-d38ac4b6de67",
+      "name": "Sticky Note a8d4c4e4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3. Weather Verification\n\nOpenWeather API call using the incident location. Retrieves weather, temperature, wind speed and humidity to inform resource allocation. Uses an HTTP Query Auth credential for the API key.",
+        "height": 200,
+        "width": 300
+      },
+      "id": "359c4ea9-4a70-4eae-84ec-2ee4b9593897",
+      "name": "Sticky Note 359c4ea9",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4. Resource Allocation AI\n\nSecond Gemini agent. Combines the incident analysis + weather to recommend fire trucks, ambulances, police units, rescue/medical teams, special equipment and safety instructions as JSON.",
+        "height": 200,
+        "width": 300
+      },
+      "id": "cc8cb894-8f26-4321-897c-b107ad6a29db",
+      "name": "Sticky Note cc8cb894",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 5. Executive Summary AI\n\nThird Gemini agent. Produces a concise executive summary for coordinators: incident, severity, weather, required resources, estimated response time and immediate actions.",
+        "height": 200,
+        "width": 300
+      },
+      "id": "bd2659ae-1324-4aaf-a6ce-46abfeb8e1b1",
+      "name": "Sticky Note bd2659ae",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 6. Notify & Log\n\nGmail sends the alert email; Google Sheets appends a full incident record. Both use placeholder credentials.\n\n### Error Handling\nEvery API/AI node uses **Continue On Error** so a single failed call does not stop the whole response pipeline.\n\n### Extensible\nWebhook, Maps, Telegram, Slack, SMS, PDF reports and dashboards can be added by branching off the existing nodes.",
+        "height": 200,
+        "width": 300
+      },
+      "id": "fec8f2eb-9a51-4cda-95ce-b6aeda4c0e30",
+      "name": "Sticky Note fec8f2eb",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -48
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger (Test)": {
+      "main": [
+        [
+          {
+            "node": "Set Incident Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Incident Data": {
+      "main": [
+        [
+          {
+            "node": "Incident Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Incident Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Weather Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Analyzer": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Incident Analyzer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Incident Analysis": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Incident Analyzer",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weather Check": {
+      "main": [
+        [
+          {
+            "node": "Resource Allocation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resource Allocation": {
+      "main": [
+        [
+          {
+            "node": "Executive Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Resources": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Resource Allocation",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Resource Plan": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Resource Allocation",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Executive Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Summary": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Executive Summary",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Alert Email": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ff4fda48-69f6-4ddf-a5d2-2d575a0c79f7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cfbbf9ddfd040dd30578b998547d983626c75cf0b146562f0dd7f82c026985b3"
+  },
+  "nodeGroups": [],
+  "id": "Pj2FZ7a7CbtJYLeO",
+  "tags": []
+}
